@@ -5,10 +5,11 @@ import io
 import time
 import random
 import base64
+import re
 
 # --- 1. 페이지 기본 설정 및 스타일 ---
 st.set_page_config(
-    page_title="RAEMIAN Sovereign",
+    page_title="RAEMIAN Sovereign AI",
     page_icon="🤖",
     layout="centered"
 )
@@ -209,18 +210,19 @@ def generate_visitor_car_image(plate_number):
 def generate_parking_spot_image(spot_details):
     """지정된 주차 공간의 이미지를 생성하는 함수."""
     try:
-        parts = spot_details.split()
-        floor = parts[0].replace('층', '')
-        spot_code = parts[1]
+        floor, spot_code = spot_details.split('층 ')
+        spot_prefix = ''.join(re.findall(r'[A-Za-z]', spot_code))
+        spot_num = int(''.join(re.findall(r'\d', spot_code)))
+        neighbor_spot1 = f"{spot_prefix}{spot_num - 1}"
+        neighbor_spot2 = f"{spot_prefix}{spot_num + 1}"
     except:
-        floor = "B2"
-        spot_code = "A12"
+        floor, spot_code, neighbor_spot1, neighbor_spot2 = "B2", "A12", "A11", "A13"
 
     prompt = (
         f"A photorealistic image of a single empty parking space in a clean, modern, well-lit underground parking garage. "
-        f"The main focus is this empty spot. Right next to it, a large concrete pillar is prominently and clearly marked with the parking spot number '{spot_code}' and the floor level '{floor}'. "
+        f"The main focus is this empty spot. Right next to it, a large concrete pillar is prominently and clearly marked with the parking spot number '{spot_code}' and the floor level '{floor}층'. "
         f"To create a realistic environment, other cars are visible parked in the background, further down the aisle. "
-        f"Some other pillars can be seen in the distance, but they are marked with different, less distinct numbers. "
+        f"**Crucially, other pillars visible in the distance MUST be marked with different but similar numbers**, for example '{neighbor_spot1}' or '{neighbor_spot2}'. Do not repeat '{spot_code}' on background pillars. "
         f"The perspective is from a person standing looking directly at the empty '{spot_code}' spot."
     )
     try:
@@ -248,8 +250,8 @@ def assign_parking_spot():
     """방문객에게 주차 공간을 랜덤으로 배정하는 함수."""
     floor = random.choice(['B1', 'B2'])
     section = random.choice(['A', 'B', 'C', 'L', 'M'])
-    number = random.randint(1, 20)
-    return f"{floor}층 {section}{number} 구역"
+    number = random.randint(10, 20) 
+    return f"{floor}층 {section}{number}"
 
 def generate_resident_unit():
     """규칙에 따라 랜덤한 호수를 생성하는 함수."""
@@ -300,15 +302,18 @@ if current_step == "initial":
 elif current_step == "input_car_number":
     st.subheader("방문객 차량 등록")
     st.write("손님의 차량 번호를 입력해주세요.")
-    car_number_input = st.text_input("차량 번호", placeholder="예시) 123가 4567", label_visibility="collapsed")
     
-    if st.button("다음", type="primary"):
-        if car_number_input:
-            st.session_state.car_number = car_number_input
-            st.session_state.step = "select_parking_hours"
-            st.rerun()
-        else:
-            st.warning("차량 번호를 입력해주세요.")
+    with st.form("car_input_form"):
+        car_number_input = st.text_input("차량 번호", placeholder="예시) 123가 4567", label_visibility="collapsed")
+        submitted = st.form_submit_button("다음", type="primary")
+
+        if submitted:
+            if car_number_input:
+                st.session_state.car_number = car_number_input
+                st.session_state.step = "select_parking_hours"
+                st.rerun()
+            else:
+                st.warning("차량 번호를 입력해주세요.")
 
 elif current_step == "select_parking_hours":
     st.subheader("방문객 주차 시간 설정")
@@ -351,7 +356,7 @@ elif current_step == "final_confirmation":
         col1, col2 = st.columns(2)
         if col1.button("✅ 예, 맞습니다", type="primary"): st.session_state.step = "complete"; st.rerun()
         if col2.button("❌ 아니오"):
-            for key in list(st.session_state.keys()): del st.session_state[key]
+            st.session_state.generated_image = None # Reset only the image to regenerate
             st.rerun()
 
 elif current_step == "complete":
